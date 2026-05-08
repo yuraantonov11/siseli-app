@@ -132,6 +132,7 @@ jobs:
           echo "Computed Android build: name=$PUBSPEC_VERSION code=$BUILD_CODE"
 
       - name: Configure Android release signing
+        id: signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -139,7 +140,8 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
-            echo "⚠️ Warning: Android signing secrets not configured. Building with debug key (not suitable for Play Store release)."
+            echo "⚠️ Android signing secrets not configured. Skipping Android build."
+            echo "available=false" >> "$GITHUB_OUTPUT"
           else
             echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
             cat > android/key.properties <<EOF
@@ -148,15 +150,19 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=upload-keystore.jks
           EOF
+            echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Android APK
+        if: steps.signing.outputs.available == 'true'
         run: flutter build apk --release --build-name "$ANDROID_BUILD_NAME" --build-number "$ANDROID_BUILD_CODE"
 
       - name: Build Android AAB
+        if: steps.signing.outputs.available == 'true'
         run: flutter build appbundle --release --build-name "$ANDROID_BUILD_NAME" --build-number "$ANDROID_BUILD_CODE"
 
       - name: Package Android artifacts
+        if: steps.signing.outputs.available == 'true'
         run: |
           PUBSPEC_VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n1 | tr -d '\r' | xargs)
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
@@ -171,6 +177,7 @@ jobs:
           cp build/app/outputs/bundle/release/app-release.aab "artifacts/smart_inverter_android_v${RELEASE_VERSION}.aab"
 
       - name: Upload Android artifacts
+        if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: android-assets
@@ -194,7 +201,9 @@ jobs:
           path: release_assets
 
       - name: Download Android artifacts
+        if: needs.build_android.result == 'success'
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: android-assets
           path: release_assets
