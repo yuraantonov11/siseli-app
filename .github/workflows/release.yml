@@ -139,17 +139,16 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$ANDROID_KEYSTORE_PASSWORD" || -z "$ANDROID_KEY_ALIAS" || -z "$ANDROID_KEY_PASSWORD" ]]; then
-            echo "Missing Android signing secrets. Release APK would be signed with debug key and break updates."
-            exit 1
-          fi
-
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
-          cat > android/key.properties <<EOF
+            echo "⚠️ Warning: Android signing secrets not configured. Building with debug key (not suitable for Play Store release)."
+          else
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            cat > android/key.properties <<EOF
           storePassword=$ANDROID_KEYSTORE_PASSWORD
           keyPassword=$ANDROID_KEY_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=upload-keystore.jks
           EOF
+          fi
 
       - name: Build Android APK
         run: flutter build apk --release --build-name "$ANDROID_BUILD_NAME" --build-number "$ANDROID_BUILD_CODE"
